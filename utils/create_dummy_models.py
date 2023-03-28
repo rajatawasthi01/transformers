@@ -582,7 +582,16 @@ def convert_processors(processors, tiny_config, output_folder, result):
             slow_tokenizer = None
 
     # If there is any conversion failed, we keep the original tokenizers
-    if ((original_fast_tokenizer is not None) and (fast_tokenizer is None)) or ((original_slow_tokenizer is not None) and (slow_tokenizer is None)):
+    if (
+        (original_fast_tokenizer is not None and fast_tokenizer is None) or
+        (original_slow_tokenizer is not None and slow_tokenizer is None)
+    ):
+        warning_messagae = (
+            "There are some issues when converting the fast/slow tokenizers. The original tokenizers from the Hub "
+            " will be used instead."
+        )
+        result["warnings"].append(warning_messagae)
+        # Let's use the original version at the end (`original_fast_tokenizer` and `original_slow_tokenizer`)
         fast_tokenizer = original_fast_tokenizer
         slow_tokenizer = original_slow_tokenizer
 
