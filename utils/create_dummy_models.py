@@ -535,8 +535,9 @@ def convert_processors(processors, tiny_config, output_folder, result):
 
     # Make sure the slow tokenizer (if any) corresponds to the fast version (as it might be converted above)
     if fast_tokenizer:
-        # Make sure the converted fast tokenizer can be saved
+        # Make sure the fast tokenizer can be saved
         try:
+            # We don't save it to `output_folder` at this moment - only at the end of this function.
             with tempfile.TemporaryDirectory() as tmpdir:
                 fast_tokenizer.save_pretrained(tmpdir)
                 try:
@@ -578,6 +579,7 @@ def convert_processors(processors, tiny_config, output_folder, result):
 
     # Make sure the fast tokenizer can be saved
     if fast_tokenizer:
+        # We don't save it to `output_folder` at this moment - only at the end of this function.
         with tempfile.TemporaryDirectory() as tmpdir:
             try:
                 fast_tokenizer.save_pretrained(tmpdir)
@@ -591,6 +593,7 @@ def convert_processors(processors, tiny_config, output_folder, result):
                 fast_tokenizer = None
     # Make sure the slow tokenizer can be saved
     if slow_tokenizer:
+        # We don't save it to `output_folder` at this moment - only at the end of this function.
         with tempfile.TemporaryDirectory() as tmpdir:
             try:
                 slow_tokenizer.save_pretrained(tmpdir)
