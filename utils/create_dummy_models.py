@@ -509,32 +509,47 @@ def convert_processors(processors, tiny_config, output_folder, result):
     if num_types >= 2:
         raise ValueError(f"`tokenizers` should contain at most 1 tokenizer type, but it contains {num_types} types!")
 
+    original_fast_tokenizer = None
+    original_slow_tokenizer = None
     fast_tokenizer = None
     slow_tokenizer = None
     for tokenizer in tokenizers:
         if isinstance(tokenizer, PreTrainedTokenizerFast):
-            if fast_tokenizer is None:
-                fast_tokenizer = tokenizer
+            original_fast_tokenizer = tokenizer
+            fast_tokenizer = tokenizer
+            try:
+                # Wav2Vec2ForCTC , ByT5Tokenizer etc. all are already small enough and have no fast version that can
+                # be retrained
+                if fast_tokenizer.vocab_size > TARGET_VOCAB_SIZE:
+                    fast_tokenizer = convert_tokenizer(tokenizer)
+            except Exception:
+                result["warnings"].append(
+                    (
+                        f"Failed to convert the fast tokenizer for {fast_tokenizer.__class__.__name__}.",
+                        traceback.format_exc(),
+                    )
+                )
+        else:
+            original_slow_tokenizer = tokenizer
+            slow_tokenizer = tokenizer
+
+    # Make sure the slow tokenizer (if any) corresponds to the fast version (as it might be converted above)
+    if fast_tokenizer:
+        # Make sure the converted fast tokenizer can be saved
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                fast_tokenizer.save_pretrained(tmpdir)
                 try:
-                    # Wav2Vec2ForCTC , ByT5Tokenizer etc. all are already small enough and have no fast version that can
-                    # be retrained
-                    if fast_tokenizer.vocab_size > TARGET_VOCAB_SIZE:
-                        fast_tokenizer = convert_tokenizer(tokenizer)
+                    slow_tokenizer = AutoTokenizer.from_pretrained(tmpdir, use_fast=False)
                 except Exception:
                     result["warnings"].append(
                         (
-                            f"Failed to convert the fast tokenizer for {fast_tokenizer.__class__.__name__}.",
+                            f"Failed to load the slow tokenizer saved from {fast_tokenizer.__class__.__name__}.",
                             traceback.format_exc(),
                         )
                     )
-                    continue
-        elif slow_tokenizer is None:
-            slow_tokenizer = tokenizer
-
-    # Make sure the fast tokenizer can be saved
-    if fast_tokenizer:
-        try:
-            fast_tokenizer.save_pretrained(output_folder)
+                    # Let's just keep the fast version
+                    slow_tokenizer = None
         except Exception:
             result["warnings"].append(
                 (
@@ -544,32 +559,49 @@ def convert_processors(processors, tiny_config, output_folder, result):
             )
             fast_tokenizer = None
 
-    # Make sure the slow tokenizer (if any) corresponds to the fast version (as it might be converted above)
-    if fast_tokenizer:
-        try:
-            slow_tokenizer = AutoTokenizer.from_pretrained(output_folder, use_fast=False)
-        except Exception:
-            result["warnings"].append(
-                (
-                    f"Failed to load the slow tokenizer saved from {fast_tokenizer.__class__.__name__}.",
-                    traceback.format_exc(),
-                )
+    # sanity check: fast and slow tokenizers should be compatible
+    if fast_tokenizer is not None and slow_tokenizer is not None:
+        if fast_tokenizer.vocab_size != slow_tokenizer.vocab_size:
+            warning_messagae = (
+                f"{fast_tokenizer.__class__.__name__}.vocab_size = {fast_tokenizer.vocab_size} and "
+                f"{slow_tokenizer.__class__.__name__}.vocab_size = {slow_tokenizer.vocab_size}"
             )
-            # Let's just keep the fast version
+            result["warnings"].append(warning_messagae)
+            # Let's use the original version at the end (`original_fast_tokenizer` and `original_slow_tokenizer`)
+            fast_tokenizer = None
             slow_tokenizer = None
 
-    # If the fast version can't be created and saved, let's use the slow version
-    if not fast_tokenizer and slow_tokenizer:
-        try:
-            slow_tokenizer.save_pretrained(output_folder)
-        except Exception:
-            result["warnings"].append(
-                (
-                    f"Failed to save the slow tokenizer for {slow_tokenizer.__class__.__name__}.",
-                    traceback.format_exc(),
+    # If there is any conversion failed, we keep the original tokenizers
+    if ((original_fast_tokenizer is not None) and (fast_tokenizer is None)) or ((original_slow_tokenizer is not None) and (slow_tokenizer is None)):
+        fast_tokenizer = original_fast_tokenizer
+        slow_tokenizer = original_slow_tokenizer
+
+    # Make sure the fast tokenizer can be saved
+    if fast_tokenizer:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            try:
+                fast_tokenizer.save_pretrained(tmpdir)
+            except Exception:
+                result["warnings"].append(
+                    (
+                        f"Failed to save the fast tokenizer for {fast_tokenizer.__class__.__name__}.",
+                        traceback.format_exc(),
+                    )
                 )
-            )
-            slow_tokenizer = None
+                fast_tokenizer = None
+    # Make sure the slow tokenizer can be saved
+    if slow_tokenizer:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            try:
+                slow_tokenizer.save_pretrained(tmpdir)
+            except Exception:
+                result["warnings"].append(
+                    (
+                        f"Failed to save the slow tokenizer for {slow_tokenizer.__class__.__name__}.",
+                        traceback.format_exc(),
+                    )
+                )
+                slow_tokenizer = None
 
     # update feature extractors using the tiny config
     try:
