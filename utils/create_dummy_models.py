@@ -488,18 +488,25 @@ def convert_processors(processors, tiny_config, output_folder, result):
     feature_extractors = []
     for processor in processors:
         if isinstance(processor, PreTrainedTokenizerBase):
-            tokenizers.append(processor)
+            if processor.__class__.__name__ not in set(x.__class__.__name__ for x in tokenizers):
+                tokenizers.append(processor)
         elif isinstance(processor, BaseImageProcessor):
-            feature_extractors.append(processor)
+            if processor.__class__.__name__ not in set(x.__class__.__name__ for x in feature_extractors):
+                feature_extractors.append(processor)
         elif isinstance(processor, FeatureExtractionMixin):
-            feature_extractors.append(processor)
+            if processor.__class__.__name__ not in set(x.__class__.__name__ for x in feature_extractors):
+                feature_extractors.append(processor)
         elif isinstance(processor, ProcessorMixin):
+            if hasattr(processor, "tokenizer"):
+                if processor.tokenizer.__class__.__name__ not in set(x.__class__.__name__ for x in tokenizers):
+                    tokenizers.append(processor.tokenizer)
             # Currently, we only have these 2 possibilities
-            tokenizers.append(processor.tokenizer)
             if hasattr(processor, "image_processor"):
-                feature_extractors.append(processor.image_processor)
+                if processor.image_processor.__class__.__name__ not in set(x.__class__.__name__ for x in feature_extractors):
+                    feature_extractors.append(processor.image_processor)
             elif hasattr(processor, "feature_extractor"):
-                feature_extractors.append(processor.feature_extractor)
+                if processor.feature_extractor.__class__.__name__ not in set(x.__class__.__name__ for x in feature_extractors):
+                    feature_extractors.append(processor.feature_extractor)
 
     # check the built processors have the unique type
     num_types = len({x.__class__.__name__ for x in feature_extractors})
