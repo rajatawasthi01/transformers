@@ -564,8 +564,10 @@ def convert_processors(processors, tiny_config, output_folder, result):
     if fast_tokenizer is not None and slow_tokenizer is not None:
         if fast_tokenizer.vocab_size != slow_tokenizer.vocab_size:
             warning_messagae = (
+                f"The fast/slow tokenizers have different vocabulary size: "
                 f"{fast_tokenizer.__class__.__name__}.vocab_size = {fast_tokenizer.vocab_size} and "
-                f"{slow_tokenizer.__class__.__name__}.vocab_size = {slow_tokenizer.vocab_size}"
+                f"{slow_tokenizer.__class__.__name__}.vocab_size = {slow_tokenizer.vocab_size}."
+                "The original tokenizers from the Hub will be used instead."
             )
             result["warnings"].append(warning_messagae)
             # Let's use the original version at the end (`original_fast_tokenizer` and `original_slow_tokenizer`)
